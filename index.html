@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>BLACK STUDIO</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a; 
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+        }
+        .header h1 { 
+            font-size: 28px; 
+            font-weight: 800;
+            letter-spacing: 2px;
+        }
+        .header span { color: #e94560; }
+        .card {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #2a2a3e;
+        }
+        .card-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #8b8b9a;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+        select, input, textarea, button {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #2a2a3e;
+            background: #0f0f1a;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        button {
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            border: none;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #2a2a3e;
+            color: #666;
+        }
+        .preview {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #0f0f1a;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            margin-top: 10px;
+        }
+        .preview img {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 16px;
+        }
+        .status {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1a1a2e;
+            padding: 20px;
+            border-top: 1px solid #2a2a3e;
+            text-align: center;
+        }
+        #progress {
+            height: 4px;
+            background: #2a2a3e;
+            border-radius: 2px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        #progressBar {
+            height: 100%;
+            background: #e94560;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>BLACK <span>STUDIO</span></h1>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📸 Фото лица</div>
+        <input type="file" id="facePhoto" accept="image/*" capture="user">
+    </div>
+
+    <div class="card">
+        <div class="card-title">⚙️ Движок</div>
+        <select id="engine">
+            <option value="seedream">Seedream 4.5</option>
+            <option value="pulid">PuLID (Face Swap)</option>
+            <option value="aurora">Aurora (Grok)</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <div class="card-title">💡 Описание</div>
+        <textarea id="prompt" rows="3" placeholder="Опишите желаемый результат..."></textarea>
+    </div>
+
+    <button id="generateBtn" onclick="generate()">🚀 ГЕНЕРИРОВАТЬ</button>
+
+    <div class="card">
+        <div class="card-title">👁️ Результат</div>
+        <div class="preview" id="preview">📷</div>
+    </div>
+
+    <div class="status">
+        <div id="progress"><div id="progressBar"></div></div>
+        <div id="statusText">Готов к работе</div>
+    </div>
+
+    <script>
+        // ЗАМЕНИТЕ НА ВАШ URL ПОСЛЕ ПОЛУЧЕНИЯ
+        const GAS_URL = 'https://script.google.com/macros/s/ВАШ_ID/exec';
+
+        async function generate() {
+            const btn = document.getElementById('generateBtn');
+            const file = document.getElementById('facePhoto').files[0];
+            const prompt = document.getElementById('prompt').value;
+            const engine = document.getElementById('engine').value;
+
+            if (!file) {
+                alert('Выберите фото лица');
+                return;
+            }
+
+            btn.disabled = true;
+            updateStatus('Загрузка фото...', 10);
+
+            try {
+                // Конвертируем фото в base64
+                const base64 = await fileToBase64(file);
+                
+                updateStatus('Генерация...', 50);
+                
+                // Отправляем на сервер
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'generate',
+                        engine: engine,
+                        prompt: prompt,
+                        faceImage: base64
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.error) throw new Error(result.error);
+
+                // Показываем результат
+                document.getElementById('preview').innerHTML = 
+                    `<img src="${result.imageUrl}" alt="Result">`;
+                
+                updateStatus('✅ Готово!', 100);
+
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+                updateStatus('❌ Ошибка', 0);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateStatus(text, percent) {
+            document.getElementById('statusText').textContent = text;
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+    </script>
+</body>
+</html>

@@ -185,7 +185,7 @@
     btn.disabled = true;
     updateStatus('📤 Загрузка фото...', 10);
 
-    fileToBase64(fileInput.files[0]).then(base64 => {
+    compressImage(fileInput.files[0].then(base64 => {
         updateStatus('🎨 Генерация...', 50);
         
         const data = {

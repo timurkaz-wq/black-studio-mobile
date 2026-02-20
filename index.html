@@ -145,74 +145,100 @@
             document.getElementById('progressBar').style.width = percent + '%';
         }
 
-        function generate() {
-            const btn = document.getElementById('generateBtn');
-            const fileInput = document.getElementById('facePhoto');
-            const prompt = document.getElementById('prompt').value;
-            const engine = document.getElementById('engine').value;
+       function generate() {
+    const btn = document.getElementById('generateBtn');
+    const fileInput = document.getElementById('facePhoto');
+    const prompt = document.getElementById('prompt').value;
+    const engine = document.getElementById('engine').value;
 
-            if (!fileInput.files[0]) {
-                alert('📸 Выберите фото лица');
-                return;
+    if (!fileInput.files[0]) {
+        alert('📸 Выберите фото лица');
+        return;
+    }
+
+    btn.disabled = true;
+    updateStatus('📤 Сжатие фото...', 5);
+
+    // Сжимаем фото перед отправкой
+    const file = fileInput.files[0];
+    const img = new Image();
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        img.onload = function() {
+            // Создаем canvas для сжатия
+            const canvas = document.createElement('canvas');
+            const maxSize = 400; // Максимум 400px по ширине/высоте
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > height) {
+                if (width > maxSize) {
+                    height *= maxSize / width;
+                    width = maxSize;
+                }
+            } else {
+                if (height > maxSize) {
+                    width *= maxSize / height;
+                    height = maxSize;
+                }
             }
-
-            btn.disabled = true;
-            updateStatus('📤 Подготовка...', 10);
-
-            // Читаем файл как base64 (без сжатия для простоты)
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64 = e.target.result.split(',')[1];
-                
-                updateStatus('🎨 Отправка...', 30);
-                
-                // JSONP запрос
-                const script = document.createElement('script');
-                const cb = 'cb' + Date.now();
-                
-                window[cb] = function(result) {
-                    delete window[cb];
-                    if (script.parentNode) document.head.removeChild(script);
-                    
-                    if (result.error) {
-                        alert('❌ Ошибка: ' + result.error);
-                        updateStatus('Ошибка', 0);
-                    } else if (result.imageUrl) {
-                        document.getElementById('preview').innerHTML = '<img src="' + result.imageUrl + '">';
-                        updateStatus('✅ Готово!', 100);
-                    }
-                    btn.disabled = false;
-                };
-                
-                // Таймаут на случай если сервер не ответит
-                setTimeout(function() {
-                    if (window[cb]) {
-                        delete window[cb];
-                        if (script.parentNode) document.head.removeChild(script);
-                        alert('⏱️ Таймаут - сервер не ответил');
-                        updateStatus('Таймаут', 0);
-                        btn.disabled = false;
-                    }
-                }, 30000);
-                
-                const data = {
-                    action: 'generate',
-                    engine: engine,
-                    prompt: prompt,
-                    faceImage: base64
-                };
-                
-                script.src = GAS_URL + '&callback=' + cb + '&data=' + encodeURIComponent(JSON.stringify(data));
-                document.head.appendChild(script);
-            };
             
-            reader.onerror = function() {
-                alert('❌ Ошибка чтения файла');
-                btn.disabled = false;
-            };
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
             
-            reader.readAsDataURL(fileInput.files[0]);
+            // Получаем base64 с низким качеством (0.6 = 60%)
+            const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+            
+            updateStatus('🎨 Отправка...', 30);
+            sendToServer(base64, prompt, engine, btn);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function sendToServer(base64, prompt, engine, btn) {
+    const script = document.createElement('script');
+    const cb = 'cb' + Date.now();
+    
+    window[cb] = function(result) {
+        delete window[cb];
+        if (script.parentNode) document.head.removeChild(script);
+        
+        if (result.error) {
+            alert('❌ Ошибка: ' + result.error);
+            updateStatus('Ошибка', 0);
+        } else if (result.imageUrl) {
+            document.getElementById('preview').innerHTML = '<img src="' + result.imageUrl + '">';
+            updateStatus('✅ Готово!', 100);
         }
+        btn.disabled = false;
+    };
+    
+    // Таймаут 25 секунд
+    setTimeout(function() {
+        if (window[cb]) {
+            delete window[cb];
+            if (script.parentNode) document.head.removeChild(script);
+            alert('⏱️ Таймаут - попробуйте еще раз');
+            updateStatus('Таймаут', 0);
+            btn.disabled = false;
+        }
+    }, 25000);
+    
+    const data = {
+        action: 'generate',
+        engine: engine,
+        prompt: prompt,
+        faceImage: base64
+    };
+    
+    script.src = GAS_URL + '&callback=' + cb + '&data=' + encodeURIComponent(JSON.stringify(data));
+    document.head.appendChild(script);
+}
     </script>
 </body>
 </html>
